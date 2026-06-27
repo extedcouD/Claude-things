@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#4f46e5" />
+  <title>Referral Message Builder</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --accent: #4f46e5;
+      --accent-press: #4338ca;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --border: #334155;
+      --ok: #22c55e;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: env(safe-area-inset-top) 18px env(safe-area-inset-bottom);
+    }
+    .wrap {
+      width: 100%;
+      max-width: 480px;
+      margin: 0 auto;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 18px;
+      padding: 28px 0;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 4px; text-align: center; }
+    p.sub { margin: 0; color: var(--muted); text-align: center; font-size: 0.95rem; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    label { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
+    input[type="url"], input[type="text"] {
+      width: 100%;
+      font-size: 1.05rem;
+      padding: 16px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: #0f172a;
+      color: var(--text);
+      outline: none;
+    }
+    input:focus { border-color: var(--accent); }
+    button {
+      width: 100%;
+      font-size: 1.15rem;
+      font-weight: 700;
+      padding: 18px;
+      border: none;
+      border-radius: 14px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      min-height: 60px;
+      transition: background 0.15s, transform 0.05s;
+    }
+    button:active { background: var(--accent-press); transform: scale(0.98); }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 600;
+      min-height: 48px;
+      padding: 12px;
+    }
+    .preview {
+      font-size: 0.92rem;
+      line-height: 1.55;
+      color: var(--muted);
+      background: #0f172a;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .preview .link { color: var(--accent); font-weight: 600; }
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(24px + env(safe-area-inset-bottom));
+      transform: translateX(-50%) translateY(20px);
+      background: var(--ok);
+      color: #04210f;
+      font-weight: 700;
+      padding: 12px 20px;
+      border-radius: 999px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      max-width: 90%;
+      text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <h1>Referral Builder</h1>
+      <p class="sub">Paste a job link and share your referral message.</p>
+    </div>
+
+    <div class="card">
+      <div>
+        <label for="link">Job link</label>
+        <input id="link" type="url" inputmode="url" autocomplete="off"
+               placeholder="https://… (leave empty to read clipboard)" />
+      </div>
+      <button type="button" class="secondary" id="pasteBtn">📋 Paste from clipboard</button>
+      <button type="button" id="shareBtn">Build &amp; Share</button>
+    </div>
+
+    <div>
+      <label style="display:block;margin-bottom:8px;">Preview</label>
+      <div class="preview" id="preview"></div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    var linkInput = document.getElementById('link');
+    var preview = document.getElementById('preview');
+    var toastEl = document.getElementById('toast');
+
+    function buildMessage(link) {
+      return "Hello, my name is Rudransh, I am from Thapar. I have around 2 years of " +
+             "experience as a fullstack software engineer, and I saw this opening at your " +
+             "company: " + link + ". Could you take a look at my resume and potentially give " +
+             "me a referral for this posting? I'd genuinely appreciate any feedback from your end.";
+    }
+
+    function renderPreview() {
+      var link = linkInput.value.trim() || "[LINK]";
+      var safe = link.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      preview.innerHTML = buildMessage('<span class="link">' + safe + '</span>');
+    }
+
+    function toast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
+    }
+
+    async function readClipboard() {
+      try {
+        if (navigator.clipboard && navigator.clipboard.readText) {
+          var text = await navigator.clipboard.readText();
+          if (text && text.trim()) {
+            linkInput.value = text.trim();
+            renderPreview();
+            return text.trim();
+          }
+          toast('Clipboard is empty');
+        } else {
+          toast('Clipboard not available — paste manually');
+        }
+      } catch (e) {
+        toast('Allow clipboard access, or paste manually');
+      }
+      return '';
+    }
+
+    async function copyToClipboard(text) {
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch (e) {}
+      // Fallback for older browsers
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        var ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return ok;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function buildAndShare() {
+      var link = linkInput.value.trim();
+      // If empty, try to read the clipboard.
+      if (!link) {
+        link = await readClipboard();
+      }
+      if (!link) {
+        toast('Please paste or type a job link');
+        linkInput.focus();
+        return;
+      }
+
+      var message = buildMessage(link);
+
+      if (navigator.share) {
+        try {
+          await navigator.share({ text: message });
+          return;
+        } catch (e) {
+          // User cancelled or share failed — fall through to copy.
+          if (e && e.name === 'AbortError') return;
+        }
+      }
+
+      var copied = await copyToClipboard(message);
+      if (copied) {
+        alert('Sharing not available on this device.\n\nThe message has been copied to your clipboard — just paste it wherever you like.');
+      } else {
+        alert('Could not share or copy automatically. Here is your message:\n\n' + message);
+      }
+    }
+
+    document.getElementById('shareBtn').addEventListener('click', buildAndShare);
+    document.getElementById('pasteBtn').addEventListener('click', readClipboard);
+    linkInput.addEventListener('input', renderPreview);
+
+    renderPreview();
+  </script>
+</body>
+</html>
