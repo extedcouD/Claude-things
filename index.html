@@ -53,6 +53,27 @@
       margin: 0;
     }
     .field { display: flex; flex-direction: column; gap: 6px; }
+    p.hint { margin: 0; font-size: 0.82rem; line-height: 1.45; color: var(--muted); }
+    code {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1px 6px;
+      font-size: 0.85em;
+      color: var(--accent);
+    }
+    .preview {
+      font-size: 0.95rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #0f172a;
+      border: 1px dashed var(--border);
+      border-radius: 12px;
+      padding: 14px;
+      min-height: 60px;
+    }
+    .preview .lnk { color: var(--accent); font-weight: 600; }
     label { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
     input, textarea {
       width: 100%;
@@ -151,7 +172,10 @@
     </div>
 
     <div class="card">
-      <h2>Final message (editable)</h2>
+      <h2>Message template (editable)</h2>
+      <p class="hint">Edit the wording/formatting however you like. Keep the
+        <code>[LINK]</code> tag where the job link should go — it gets replaced
+        with the current link each time you share.</p>
       <div class="field">
         <textarea id="message" placeholder="Tap “Build message” above, then edit here as you like…"></textarea>
       </div>
@@ -159,6 +183,11 @@
         <button type="button" class="secondary" id="saveBtn">💾 Save</button>
         <button type="button" class="secondary" id="resetBtn">↺ Rebuild</button>
       </div>
+    </div>
+
+    <div class="card">
+      <h2>Preview (what gets shared)</h2>
+      <div class="preview" id="preview"></div>
       <button type="button" id="shareBtn">Share</button>
     </div>
   </div>
@@ -167,7 +196,7 @@
 
   <script>
     var PROFILE_KEY = 'referralBuilder.profile.v1';
-    var MESSAGE_KEY = 'referralBuilder.message.v1';
+    var MESSAGE_KEY = 'referralBuilder.message.v2'; // v2: template now uses a [LINK] tag
 
     var els = {
       name: document.getElementById('name'),
@@ -177,6 +206,7 @@
       link: document.getElementById('link'),
       message: document.getElementById('message')
     };
+    var previewEl = document.getElementById('preview');
     var toastEl = document.getElementById('toast');
 
     function toast(msg) {
@@ -185,16 +215,39 @@
       setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
     }
 
+    // Builds the TEMPLATE: profile fields are baked in, but the job link stays
+    // as a literal [LINK] tag so it can be swapped per-job without re-editing.
     function buildMessage() {
       var name = els.name.value.trim() || '[your name]';
       var from = els.from.value.trim() || '[your school]';
       var years = els.years.value.trim() || '[X]';
       var role = els.role.value.trim() || '[your role]';
-      var link = els.link.value.trim() || '[LINK]';
       return "Hello, my name is " + name + ", I am from " + from + ". I have around " +
              years + " years of experience as a " + role + ", and I saw this opening at your " +
-             "company: " + link + ". Could you take a look at my resume and potentially give " +
+             "company: [LINK]. Could you take a look at my resume and potentially give " +
              "me a referral for this posting? I'd genuinely appreciate any feedback from your end.";
+    }
+
+    // The text that actually gets shared: template with [LINK] -> current link.
+    function finalMessage() {
+      var tpl = els.message.value;
+      var link = els.link.value.trim();
+      if (tpl.indexOf('[LINK]') !== -1) {
+        return tpl.split('[LINK]').join(link || '[LINK]');
+      }
+      return tpl; // no tag present — share as-is
+    }
+
+    function renderPreview() {
+      var link = els.link.value.trim();
+      var hasLink = !!link;
+      var safe = (els.message.value || '')
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      var linkHtml = hasLink
+        ? '<span class="lnk">' + link.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</span>'
+        : '<span class="lnk">[LINK]</span>';
+      previewEl.innerHTML = safe.split('[LINK]').join(linkHtml) ||
+        '<span style="color:var(--muted)">Build the message to see a preview…</span>';
     }
 
     /* ---- localStorage: profile fields + edited message ---- */
@@ -277,15 +330,20 @@
       }
       els.message.value = buildMessage();
       saveMessage();
-      toast('Message built — edit it below if you like');
+      renderPreview();
+      toast('Template built — edit it below if you like');
     }
 
     async function share() {
-      var message = els.message.value.trim();
-      if (!message) {
+      if (!els.message.value.trim()) {
         toast('Build the message first');
         return;
       }
+      if (!els.link.value.trim()) {
+        await readClipboard(); // empty link → try clipboard
+        renderPreview();
+      }
+      var message = finalMessage().trim();
       saveMessage();
       if (navigator.share) {
         try {
@@ -307,9 +365,12 @@
     ['name', 'from', 'years', 'role'].forEach(function (k) {
       els[k].addEventListener('input', saveProfile);
     });
-    els.message.addEventListener('input', saveMessage);
+    els.message.addEventListener('input', function () { saveMessage(); renderPreview(); });
+    els.link.addEventListener('input', renderPreview);
 
-    document.getElementById('pasteBtn').addEventListener('click', readClipboard);
+    document.getElementById('pasteBtn').addEventListener('click', async function () {
+      await readClipboard(); renderPreview();
+    });
     document.getElementById('buildBtn').addEventListener('click', build);
     document.getElementById('resetBtn').addEventListener('click', build);
     document.getElementById('shareBtn').addEventListener('click', share);
@@ -320,6 +381,9 @@
     // Restore everything on load.
     loadProfile();
     loadMessage();
+    // If there's no saved template yet, build a starter one from defaults.
+    if (!els.message.value.trim()) els.message.value = buildMessage();
+    renderPreview();
   </script>
 </body>
 </html>
