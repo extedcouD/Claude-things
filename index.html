@@ -168,20 +168,20 @@
                placeholder="https://… (empty = read clipboard)" />
       </div>
       <button type="button" class="secondary" id="pasteBtn">📋 Paste link from clipboard</button>
-      <button type="button" id="buildBtn">Build message</button>
     </div>
 
     <div class="card">
       <h2>Message template (editable)</h2>
-      <p class="hint">Edit the wording/formatting however you like. Keep the
-        <code>[LINK]</code> tag where the job link should go — it gets replaced
-        with the current link each time you share.</p>
+      <p class="hint">This fills in from your details above automatically. Edit the
+        wording/formatting however you like — your edits are saved and kept. Keep the
+        <code>[LINK]</code> tag where the job link should go; it's replaced with the
+        current link each time you share.</p>
       <div class="field">
-        <textarea id="message" placeholder="Tap “Build message” above, then edit here as you like…"></textarea>
+        <textarea id="message" placeholder="Your message template…"></textarea>
       </div>
       <div class="btn-row">
         <button type="button" class="secondary" id="saveBtn">💾 Save</button>
-        <button type="button" class="secondary" id="resetBtn">↺ Rebuild</button>
+        <button type="button" class="secondary" id="resetBtn">↺ Reset to my details</button>
       </div>
     </div>
 
@@ -197,6 +197,11 @@
   <script>
     var PROFILE_KEY = 'referralBuilder.profile.v1';
     var MESSAGE_KEY = 'referralBuilder.message.v2'; // v2: template now uses a [LINK] tag
+    var EDITED_KEY  = 'referralBuilder.edited.v2';  // has the user hand-edited the template?
+
+    // While false, the template auto-follows your details. Once you edit the
+    // template by hand, it locks so detail changes never clobber your wording.
+    var templateEdited = false;
 
     var els = {
       name: document.getElementById('name'),
@@ -284,6 +289,25 @@
       } catch (e) {}
     }
 
+    function setEdited(v) {
+      templateEdited = v;
+      try { localStorage.setItem(EDITED_KEY, v ? '1' : '0'); } catch (e) {}
+    }
+
+    function loadEdited() {
+      try { templateEdited = localStorage.getItem(EDITED_KEY) === '1'; } catch (e) {}
+    }
+
+    // Keep the template in sync with the detail fields — but only until the
+    // user has hand-edited it. After that, leave their wording alone.
+    function syncTemplateFromFields() {
+      if (!templateEdited) {
+        els.message.value = buildMessage();
+        saveMessage();
+        renderPreview();
+      }
+    }
+
     /* ---- clipboard ---- */
     async function readClipboard() {
       try {
@@ -324,19 +348,18 @@
     }
 
     /* ---- actions ---- */
-    async function build() {
-      if (!els.link.value.trim()) {
-        await readClipboard(); // empty link → try clipboard
-      }
+    // Discard hand edits and regenerate the template from the detail fields.
+    function resetTemplate() {
+      setEdited(false);
       els.message.value = buildMessage();
       saveMessage();
       renderPreview();
-      toast('Template built — edit it below if you like');
+      toast('Template reset to your details');
     }
 
     async function share() {
       if (!els.message.value.trim()) {
-        toast('Build the message first');
+        toast('Write a message template first');
         return;
       }
       if (!els.link.value.trim()) {
@@ -363,16 +386,22 @@
 
     /* ---- wiring ---- */
     ['name', 'from', 'years', 'role'].forEach(function (k) {
-      els[k].addEventListener('input', saveProfile);
+      els[k].addEventListener('input', function () {
+        saveProfile();
+        syncTemplateFromFields(); // updates template unless it's been hand-edited
+      });
     });
-    els.message.addEventListener('input', function () { saveMessage(); renderPreview(); });
+    els.message.addEventListener('input', function () {
+      setEdited(true);  // hand edit → lock the template
+      saveMessage();
+      renderPreview();
+    });
     els.link.addEventListener('input', renderPreview);
 
     document.getElementById('pasteBtn').addEventListener('click', async function () {
       await readClipboard(); renderPreview();
     });
-    document.getElementById('buildBtn').addEventListener('click', build);
-    document.getElementById('resetBtn').addEventListener('click', build);
+    document.getElementById('resetBtn').addEventListener('click', resetTemplate);
     document.getElementById('shareBtn').addEventListener('click', share);
     document.getElementById('saveBtn').addEventListener('click', function () {
       saveProfile(); saveMessage(); toast('Saved on this device');
@@ -380,9 +409,14 @@
 
     // Restore everything on load.
     loadProfile();
-    loadMessage();
-    // If there's no saved template yet, build a starter one from defaults.
+    loadEdited();
+    if (templateEdited) {
+      loadMessage(); // keep the user's hand-edited wording
+    } else {
+      els.message.value = buildMessage(); // stay in sync with current details
+    }
     if (!els.message.value.trim()) els.message.value = buildMessage();
+    saveMessage();
     renderPreview();
   </script>
 </body>
