@@ -23,20 +23,16 @@
       background: var(--bg);
       color: var(--text);
       min-height: 100vh;
-      display: flex;
-      flex-direction: column;
       padding: env(safe-area-inset-top) 18px env(safe-area-inset-bottom);
     }
     .wrap {
       width: 100%;
       max-width: 480px;
       margin: 0 auto;
-      flex: 1;
       display: flex;
       flex-direction: column;
-      justify-content: center;
       gap: 18px;
-      padding: 28px 0;
+      padding: 24px 0;
     }
     h1 { font-size: 1.5rem; margin: 0 0 4px; text-align: center; }
     p.sub { margin: 0; color: var(--muted); text-align: center; font-size: 0.95rem; }
@@ -49,18 +45,30 @@
       flex-direction: column;
       gap: 14px;
     }
+    .card h2 {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0;
+    }
+    .field { display: flex; flex-direction: column; gap: 6px; }
     label { font-size: 0.9rem; color: var(--muted); font-weight: 600; }
-    input[type="url"], input[type="text"] {
+    input, textarea {
       width: 100%;
       font-size: 1.05rem;
-      padding: 16px 14px;
+      padding: 14px;
       border-radius: 12px;
       border: 1px solid var(--border);
       background: #0f172a;
       color: var(--text);
       outline: none;
+      font-family: inherit;
     }
-    input:focus { border-color: var(--accent); }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    textarea { line-height: 1.55; min-height: 180px; resize: vertical; }
+    .row { display: flex; gap: 12px; }
+    .row .field { flex: 1; }
     button {
       width: 100%;
       font-size: 1.15rem;
@@ -84,18 +92,8 @@
       min-height: 48px;
       padding: 12px;
     }
-    .preview {
-      font-size: 0.92rem;
-      line-height: 1.55;
-      color: var(--muted);
-      background: #0f172a;
-      border: 1px dashed var(--border);
-      border-radius: 12px;
-      padding: 14px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-    .preview .link { color: var(--accent); font-weight: 600; }
+    .btn-row { display: flex; gap: 12px; }
+    .btn-row button { flex: 1; }
     .toast {
       position: fixed;
       left: 50%;
@@ -111,6 +109,7 @@
       transition: opacity 0.2s, transform 0.2s;
       max-width: 90%;
       text-align: center;
+      z-index: 10;
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   </style>
@@ -119,44 +118,66 @@
   <div class="wrap">
     <div>
       <h1>Referral Builder</h1>
-      <p class="sub">Paste a job link and share your referral message.</p>
+      <p class="sub">Fill in your details, build the message, tweak it, and share.</p>
     </div>
 
     <div class="card">
-      <div>
+      <h2>Your details</h2>
+      <div class="field">
+        <label for="name">Name</label>
+        <input id="name" type="text" autocomplete="name" placeholder="e.g. Rudransh" />
+      </div>
+      <div class="field">
+        <label for="from">From (school / college)</label>
+        <input id="from" type="text" placeholder="e.g. Thapar" />
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="years">Years of exp.</label>
+          <input id="years" type="text" inputmode="decimal" placeholder="e.g. 2" />
+        </div>
+        <div class="field">
+          <label for="role">Role</label>
+          <input id="role" type="text" placeholder="e.g. fullstack software engineer" />
+        </div>
+      </div>
+      <div class="field">
         <label for="link">Job link</label>
         <input id="link" type="url" inputmode="url" autocomplete="off"
-               placeholder="https://… (leave empty to read clipboard)" />
+               placeholder="https://… (empty = read clipboard)" />
       </div>
-      <button type="button" class="secondary" id="pasteBtn">📋 Paste from clipboard</button>
-      <button type="button" id="shareBtn">Build &amp; Share</button>
+      <button type="button" class="secondary" id="pasteBtn">📋 Paste link from clipboard</button>
+      <button type="button" id="buildBtn">Build message</button>
     </div>
 
-    <div>
-      <label style="display:block;margin-bottom:8px;">Preview</label>
-      <div class="preview" id="preview"></div>
+    <div class="card">
+      <h2>Final message (editable)</h2>
+      <div class="field">
+        <textarea id="message" placeholder="Tap “Build message” above, then edit here as you like…"></textarea>
+      </div>
+      <div class="btn-row">
+        <button type="button" class="secondary" id="saveBtn">💾 Save</button>
+        <button type="button" class="secondary" id="resetBtn">↺ Rebuild</button>
+      </div>
+      <button type="button" id="shareBtn">Share</button>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
   <script>
-    var linkInput = document.getElementById('link');
-    var preview = document.getElementById('preview');
+    var PROFILE_KEY = 'referralBuilder.profile.v1';
+    var MESSAGE_KEY = 'referralBuilder.message.v1';
+
+    var els = {
+      name: document.getElementById('name'),
+      from: document.getElementById('from'),
+      years: document.getElementById('years'),
+      role: document.getElementById('role'),
+      link: document.getElementById('link'),
+      message: document.getElementById('message')
+    };
     var toastEl = document.getElementById('toast');
-
-    function buildMessage(link) {
-      return "Hello, my name is Rudransh, I am from Thapar. I have around 2 years of " +
-             "experience as a fullstack software engineer, and I saw this opening at your " +
-             "company: " + link + ". Could you take a look at my resume and potentially give " +
-             "me a referral for this posting? I'd genuinely appreciate any feedback from your end.";
-    }
-
-    function renderPreview() {
-      var link = linkInput.value.trim() || "[LINK]";
-      var safe = link.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      preview.innerHTML = buildMessage('<span class="link">' + safe + '</span>');
-    }
 
     function toast(msg) {
       toastEl.textContent = msg;
@@ -164,13 +185,59 @@
       setTimeout(function () { toastEl.classList.remove('show'); }, 2200);
     }
 
+    function buildMessage() {
+      var name = els.name.value.trim() || '[your name]';
+      var from = els.from.value.trim() || '[your school]';
+      var years = els.years.value.trim() || '[X]';
+      var role = els.role.value.trim() || '[your role]';
+      var link = els.link.value.trim() || '[LINK]';
+      return "Hello, my name is " + name + ", I am from " + from + ". I have around " +
+             years + " years of experience as a " + role + ", and I saw this opening at your " +
+             "company: " + link + ". Could you take a look at my resume and potentially give " +
+             "me a referral for this posting? I'd genuinely appreciate any feedback from your end.";
+    }
+
+    /* ---- localStorage: profile fields + edited message ---- */
+    function saveProfile() {
+      try {
+        localStorage.setItem(PROFILE_KEY, JSON.stringify({
+          name: els.name.value, from: els.from.value,
+          years: els.years.value, role: els.role.value
+        }));
+      } catch (e) {}
+    }
+
+    function loadProfile() {
+      try {
+        var raw = localStorage.getItem(PROFILE_KEY);
+        if (raw) {
+          var p = JSON.parse(raw);
+          els.name.value = p.name || '';
+          els.from.value = p.from || '';
+          els.years.value = p.years || '';
+          els.role.value = p.role || '';
+        }
+      } catch (e) {}
+    }
+
+    function saveMessage() {
+      try { localStorage.setItem(MESSAGE_KEY, els.message.value); } catch (e) {}
+    }
+
+    function loadMessage() {
+      try {
+        var saved = localStorage.getItem(MESSAGE_KEY);
+        if (saved) els.message.value = saved;
+      } catch (e) {}
+    }
+
+    /* ---- clipboard ---- */
     async function readClipboard() {
       try {
         if (navigator.clipboard && navigator.clipboard.readText) {
           var text = await navigator.clipboard.readText();
           if (text && text.trim()) {
-            linkInput.value = text.trim();
-            renderPreview();
+            els.link.value = text.trim();
             return text.trim();
           }
           toast('Clipboard is empty');
@@ -190,47 +257,44 @@
           return true;
         }
       } catch (e) {}
-      // Fallback for older browsers
       try {
         var ta = document.createElement('textarea');
         ta.value = text;
         ta.style.position = 'fixed';
         ta.style.opacity = '0';
         document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
+        ta.focus(); ta.select();
         var ok = document.execCommand('copy');
         document.body.removeChild(ta);
         return ok;
-      } catch (e) {
-        return false;
-      }
+      } catch (e) { return false; }
     }
 
-    async function buildAndShare() {
-      var link = linkInput.value.trim();
-      // If empty, try to read the clipboard.
-      if (!link) {
-        link = await readClipboard();
+    /* ---- actions ---- */
+    async function build() {
+      if (!els.link.value.trim()) {
+        await readClipboard(); // empty link → try clipboard
       }
-      if (!link) {
-        toast('Please paste or type a job link');
-        linkInput.focus();
+      els.message.value = buildMessage();
+      saveMessage();
+      toast('Message built — edit it below if you like');
+    }
+
+    async function share() {
+      var message = els.message.value.trim();
+      if (!message) {
+        toast('Build the message first');
         return;
       }
-
-      var message = buildMessage(link);
-
+      saveMessage();
       if (navigator.share) {
         try {
           await navigator.share({ text: message });
           return;
         } catch (e) {
-          // User cancelled or share failed — fall through to copy.
-          if (e && e.name === 'AbortError') return;
+          if (e && e.name === 'AbortError') return; // user cancelled
         }
       }
-
       var copied = await copyToClipboard(message);
       if (copied) {
         alert('Sharing not available on this device.\n\nThe message has been copied to your clipboard — just paste it wherever you like.');
@@ -239,11 +303,23 @@
       }
     }
 
-    document.getElementById('shareBtn').addEventListener('click', buildAndShare);
-    document.getElementById('pasteBtn').addEventListener('click', readClipboard);
-    linkInput.addEventListener('input', renderPreview);
+    /* ---- wiring ---- */
+    ['name', 'from', 'years', 'role'].forEach(function (k) {
+      els[k].addEventListener('input', saveProfile);
+    });
+    els.message.addEventListener('input', saveMessage);
 
-    renderPreview();
+    document.getElementById('pasteBtn').addEventListener('click', readClipboard);
+    document.getElementById('buildBtn').addEventListener('click', build);
+    document.getElementById('resetBtn').addEventListener('click', build);
+    document.getElementById('shareBtn').addEventListener('click', share);
+    document.getElementById('saveBtn').addEventListener('click', function () {
+      saveProfile(); saveMessage(); toast('Saved on this device');
+    });
+
+    // Restore everything on load.
+    loadProfile();
+    loadMessage();
   </script>
 </body>
 </html>
